@@ -1,0 +1,84 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+
+// WiFi credentials
+const char* ssid = "Redmi 12";
+const char* password = "arthana123";
+
+// ThingSpeak API info
+String apiKey = "GJ7P7JINLZAD8KP0";
+const char* server = "http://api.thingspeak.com/update";
+
+// Pins
+#define GAS_SENSOR_PIN 35
+#define LED_PIN 26
+#define BUZZER_PIN 27
+
+// Gas threshold
+#define GAS_THRESHOLD 450
+
+// Update interval
+unsigned long lastUpdate = 0;
+const unsigned long updateInterval = 5000;
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(GAS_SENSOR_PIN, INPUT);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+
+  digitalWrite(LED_PIN, LOW);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  Serial.print("Connecting to WiFi");
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nWiFi Connected!");
+}
+
+void loop() {
+
+  if (millis() - lastUpdate >= updateInterval) {
+    lastUpdate = millis();
+
+    int gasValue = analogRead(GAS_SENSOR_PIN);
+    Serial.print("Gas Sensor Value: ");
+    Serial.println(gasValue);
+
+    // Alert if threshold crossed
+    if (gasValue > GAS_THRESHOLD) {
+      digitalWrite(LED_PIN, HIGH);
+      digitalWrite(BUZZER_PIN, HIGH);
+    } else {
+      digitalWrite(LED_PIN, LOW);
+      digitalWrite(BUZZER_PIN, LOW);
+    }
+
+    // Upload to ThingSpeak (Field 1)
+    if (WiFi.status() == WL_CONNECTED) {
+      HTTPClient http;
+      String url = String(server) + "?api_key=" + apiKey + "&field1=" + String(gasValue);
+      
+      http.begin(url);
+      int httpCode = http.GET();
+      
+      if (httpCode > 0) {
+        Serial.println("Data uploaded to ThingSpeak.");
+      } else {
+        Serial.print("Error Uploading: ");
+        Serial.println(httpCode);
+      }
+
+      http.end();
+    } else {
+      Serial.println("WiFi disconnected, retrying...");
+      WiFi.begin(ssid, password);
+    }
+  }
+}
