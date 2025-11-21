@@ -1,0 +1,85 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+
+// WiFi Login
+const char* ssid = "Redmi 12";
+const char* password = "arthana123";
+
+// ThingSpeak API settings
+String apiKey = "GJ7P7JINLZAD8KP0";  
+const char* server = "http://api.thingspeak.com/update";
+
+// Pins
+#define SOUND_SENSOR_PIN 34
+#define LED_PIN 26
+#define BUZZER_PIN 27
+
+// Threshold for high noise
+#define SOUND_THRESHOLD 118  
+
+unsigned long lastUpdate = 0;
+const unsigned long updateInterval = 5000;  // 5 seconds
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(SOUND_SENSOR_PIN, INPUT);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+
+  digitalWrite(LED_PIN, LOW);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  Serial.print("Connecting to WiFi");
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nWiFi Connected!");
+}
+
+void loop() {
+
+  if (millis() - lastUpdate >= updateInterval) {
+    lastUpdate = millis();
+
+    int soundValue = analogRead(SOUND_SENSOR_PIN);
+    Serial.print("Sound Sensor Value: ");
+    Serial.println(soundValue);
+
+    // Trigger LED + Buzzer on loud sound
+    if (soundValue > SOUND_THRESHOLD) {
+      digitalWrite(LED_PIN, HIGH);
+      digitalWrite(BUZZER_PIN, HIGH);
+    } 
+    else {
+      digitalWrite(LED_PIN, LOW);
+      digitalWrite(BUZZER_PIN, LOW);
+    }
+
+    // Upload to ThingSpeak
+    if (WiFi.status() == WL_CONNECTED) {
+      HTTPClient http;
+      String url = String(server) + "?api_key=" + apiKey + "&field1=" + String(soundValue);
+      
+      http.begin(url);
+      int httpCode = http.GET();
+      
+      if (httpCode > 0) {
+        Serial.println("Sound value uploaded to ThingSpeak.");
+      } else {
+        Serial.print("Upload Error: ");
+        Serial.println(httpCode);
+      }
+
+      http.end();
+    } 
+    else {
+      Serial.println("WiFi Disconnected! Reconnecting...");
+      WiFi.begin(ssid, password);
+    }
+  }
+}
