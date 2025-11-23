@@ -1,0 +1,96 @@
+#include <WiFi.h>
+#include "HTTPClient.h"
+
+// ThingSpeak setup
+const char* ssid = "Redmi Note 13 5G";
+const char* password = "12345678";
+String apiKey = "GJ7P7JINLZAD8KP0";
+const char* server = "http://api.thingspeak.com/update";
+
+// Pin assignments
+#define GAS_SENSOR_PIN 35
+#define SOUND_SENSOR_PIN 34
+#define LED_PIN 26
+#define BUZZER_PIN 27
+
+// Thresholds (adjust after calibration)
+#define GAS_THRESHOLD 450
+#define SOUND_THRESHOLD 118
+
+// 5 second update interval
+unsigned long lastUpdate = 0;
+const unsigned long updateInterval = 5000;
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(GAS_SENSOR_PIN, INPUT);
+  pinMode(SOUND_SENSOR_PIN, INPUT);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+
+  digitalWrite(LED_PIN, LOW);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  Serial.println("Connecting to WiFi...");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\n✅ WiFi connected");
+}
+
+void loop() {
+  if (millis() - lastUpdate >= updateInterval) {
+    lastUpdate = millis();
+
+    int gasValue = analogRead(GAS_SENSOR_PIN);
+    int soundValue = analogRead(SOUND_SENSOR_PIN);
+
+    Serial.print("Gas: ");
+    Serial.print(gasValue);
+    Serial.print(" | Sound: ");
+    Serial.println(soundValue);
+
+    // Alert logic
+    if (gasValue > GAS_THRESHOLD || soundValue > SOUND_THRESHOLD) {
+      digitalWrite(LED_PIN, HIGH);
+      Serial.println("⚠️ ALERT! Threshold exceeded!");
+      
+      // Buzzer beeping sound
+      for (int i = 0; i < 5; i++) {  // 5 short beeps
+        digitalWrite(BUZZER_PIN, HIGH);
+        delay(150);
+        digitalWrite(BUZZER_PIN, LOW);
+        delay(150);
+      }
+
+    } else {
+      digitalWrite(LED_PIN, LOW);
+      digitalWrite(BUZZER_PIN, LOW);
+    }
+
+    // Upload to ThingSpeak
+    if (WiFi.status() == WL_CONNECTED) {
+      HTTPClient http;
+      String url = String(server) + "?api_key=" + apiKey +
+                   "&field1=" + String(gasValue) +
+                   "&field2=" + String(soundValue);
+
+      http.begin(url);
+      int httpCode = http.GET();
+
+      if (httpCode > 0) {
+        Serial.println("✅ Data sent to ThingSpeak");
+      } else {
+        Serial.println("❌ Failed to send data");
+      }
+      http.end();
+    } else {
+      Serial.println("⚠️ WiFi disconnected, skipping upload.");
+    }
+
+    Serial.println("--------------------------");
+  }
+}
+https://thingspeak.mathworks.com/channels/3167904/private_show
